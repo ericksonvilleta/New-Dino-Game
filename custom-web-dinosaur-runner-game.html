@@ -1,0 +1,519 @@
+<!-- 
+  Game: Custom Web Dinosaur Runner Game
+  Author: Erick Villeta
+  Website: https://ericksonvilleta.com
+  Ownership: Copyright (c) 2026 Erick Villeta. All rights reserved.
+-->
+
+<!-- Game Container -->
+<div id="runner-game-container">
+    <div id="runner-game">
+        <div id="runner-bg-layer" style="background-image: url('https://ericksonvilleta.com/wp-content/uploads/2026/09/dawn-bg.webp');"></div>
+        <div id="runner-bg-layer-next"></div>
+
+        <div id="runner-score">Score: <span id="score-val">0</span> | Level: <span id="level-val">1</span> | High Score: <span id="high-score-val">0</span></div>
+        
+        <!-- Character Image Element -->
+        <img id="runner-character" src="https://ericksonvilleta.com/wp-content/uploads/2026/09/char-6.webp" alt="Dino Character">
+
+        <!-- Obstacle Image Elements (Cactus & Single-Fire Rock) -->
+        <img id="runner-obstacle" src="" alt="Cactus Obstacle">
+        <img id="runner-rock" src="" alt="Rock Obstacle">
+
+        <div id="runner-ground">
+            <div id="runner-ground-pattern"></div>
+        </div>
+        <div id="runner-message">Press Space or Tap to Play</div>
+    </div>
+</div>
+
+<style>
+    /* 
+      Stylesheet Ownership & Attribution
+      Author: Erick Villeta (https://ericksonvilleta.com)
+    */
+    #runner-game-container {
+        width: 100%;
+        max-width: 600px;
+        margin: 20px auto;
+        font-family: 'Courier New', Courier, monospace;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    #runner-game {
+        position: relative;
+        width: 100%;
+        height: 160px;
+        background: #f2bd53;
+        border: 2px solid #535353;
+        overflow: hidden;
+    }
+
+    #runner-bg-layer, #runner-bg-layer-next {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: center bottom;
+        z-index: 0;
+        transition: opacity 1.5s ease-in-out;
+    }
+
+    #runner-bg-layer {
+        opacity: 1;
+    }
+
+    #runner-bg-layer-next {
+        opacity: 0;
+    }
+
+    #runner-score {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        font-size: 13px;
+        color: #333;
+        font-weight: bold;
+        background: rgba(255, 255, 255, 0.7);
+        padding: 2px 6px;
+        border-radius: 4px;
+        z-index: 10;
+    }
+
+    #runner-character {
+        position: absolute;
+        bottom: 0px;
+        left: 50px;
+        width: 48px;
+        height: 48px;
+        object-fit: contain;
+        z-index: 2;
+    }
+
+    #runner-obstacle {
+        position: absolute;
+        bottom: 0px;
+        right: -50px;
+        width: 42px;
+        height: 48px;
+        object-fit: contain;
+        display: none;
+        z-index: 1;
+    }
+
+    #runner-rock {
+        position: absolute;
+        right: -50px;
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+        display: none;
+        z-index: 3;
+    }
+
+    #runner-ground {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        height: 0px;
+        background: transparent;
+        z-index: 4;
+        overflow: hidden;
+        display: none;
+    }
+
+    #runner-ground-pattern {
+        display: none;
+    }
+
+    #runner-message {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 16px;
+        color: #333;
+        text-align: center;
+        background: rgba(255,255,255,0.9);
+        padding: 8px 12px;
+        z-index: 10;
+        border: 1px solid #ccc;
+    }
+
+    @keyframes obstacleMove {
+        0% { right: -50px; }
+        100% { right: 620px; }
+    }
+
+    @keyframes rockFlyOnce {
+        0% { right: -50px; }
+        100% { right: 620px; }
+    }
+
+    .moving {
+        animation: obstacleMove var(--anim-speed, 1.8s) linear infinite;
+    }
+
+    .rock-moving {
+        animation: rockFlyOnce var(--anim-speed, 1.8s) linear 1 forwards;
+    }
+
+    .game-attribution {
+        margin-top: 10px;
+        font-size: 14px;
+        color: #ffffff;
+        font-family: sans-serif;
+        text-align: center;
+        width: 100%;
+        display: block;
+    }
+
+    .game-attribution a {
+        color: #8ab4f8;
+        text-decoration: none;
+    }
+
+    .game-attribution a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<script>
+/**
+ * Game Script Ownership & Attribution
+ * Developed by Erick Villeta
+ * Website: https://ericksonvilleta.com
+ * All rights reserved.
+ */
+(function() {
+    const character = document.getElementById('runner-character');
+    const obstacle = document.getElementById('runner-obstacle');
+    const rock = document.getElementById('runner-rock');
+    const bgLayer = document.getElementById('runner-bg-layer');
+    const bgLayerNext = document.getElementById('runner-bg-layer-next');
+    const scoreVal = document.getElementById('score-val');
+    const levelVal = document.getElementById('level-val');
+    const highScoreVal = document.getElementById('high-score-val');
+    const message = document.getElementById('runner-message');
+
+    const mediaBasePath = "https://ericksonvilleta.com/wp-content/uploads/2026/09/";
+
+    const bgImages = [
+        mediaBasePath + "dawn-bg.webp",
+        mediaBasePath + "day-bg.webp",
+        mediaBasePath + "sunset-bg.webp",
+        mediaBasePath + "night-bg.webp"
+    ];
+
+    const charFrames = {
+        idle: mediaBasePath + "char-6.webp",
+        jump: mediaBasePath + "char-8.webp",
+        run1: mediaBasePath + "char-10.webp",
+        run2: mediaBasePath + "char-11.webp",
+        run3: mediaBasePath + "char-12.webp"
+    };
+
+    character.src = charFrames.idle;
+    bgLayer.style.backgroundImage = `url('${bgImages[0]}')`;
+
+    let highScore = localStorage.getItem('dinoHighScore') || 0;
+    highScoreVal.textContent = highScore;
+
+    let isJumping = false;
+    let isPlaying = false;
+    let score = 0;
+    let level = 1;
+    let scoreInterval;
+    let collisionCheck;
+    let runCycleInterval;
+    
+    const gravity = 0.9;
+    const jumpStrength = 14;
+    let velocityY = 0;
+    let charBottom = 0;
+
+    let lastTriggeredMilestone = 0;
+    let isRockActive = false;
+    let rockCurrentBottom = 25;
+    let currentBgIndex = 0;
+
+    let audioCtx = null;
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    document.getElementById('runner-game').addEventListener('pointerdown', () => {
+        initAudio();
+    }, { once: true });
+
+    function playJumpSound() {
+        initAudio();
+        if (!audioCtx) return;
+        try {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(700, audioCtx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.12);
+        } catch(e) {}
+    }
+
+    function playCactusHitSound() {
+        initAudio();
+        if (!audioCtx) return;
+        try {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(110, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.25);
+        } catch(e) {}
+    }
+
+    function playRockHitSound() {
+        initAudio();
+        if (!audioCtx) return;
+        try {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 0.35);
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.35);
+        } catch(e) {}
+    }
+
+    function getAnimationSpeed() {
+        let speed = 1.8 - (level - 1) * 0.1;
+        return Math.max(speed, 0.7);
+    }
+
+    function updateGameSpeeds() {
+        let obsSpeed = getAnimationSpeed();
+        let speedStr = obsSpeed + 's';
+        obstacle.style.setProperty('--anim-speed', speedStr);
+        rock.style.setProperty('--anim-speed', speedStr);
+    }
+
+    function updateBackground() {
+        let bgIndex = Math.floor(score / 200) % bgImages.length;
+        if (bgIndex !== currentBgIndex) {
+            currentBgIndex = bgIndex;
+            bgLayerNext.style.backgroundImage = `url('${bgImages[bgIndex]}')`;
+            bgLayerNext.style.opacity = '1';
+
+            setTimeout(() => {
+                bgLayer.style.backgroundImage = `url('${bgImages[bgIndex]}')`;
+                bgLayerNext.style.opacity = '0';
+            }, 1500);
+        }
+    }
+
+    function updateCactus() {
+        if (isRockActive) return;
+
+        level = Math.floor(score / 100) + 1;
+        levelVal.textContent = level;
+        updateGameSpeeds();
+
+        let cactusNum = Math.min(Math.floor(score / 100) + 1, 50);
+        obstacle.src = mediaBasePath + cactusNum + "-Green-Cactus-Collection-by-Squeeb-Creative.svg";
+        
+        if (isPlaying && !obstacle.classList.contains('moving')) {
+            obstacle.style.display = 'block';
+            obstacle.classList.add('moving');
+        }
+    }
+
+    function triggerMilestoneRock() {
+        if (isRockActive) return;
+        isRockActive = true;
+
+        obstacle.classList.remove('moving');
+        obstacle.style.display = 'none';
+
+        updateGameSpeeds();
+
+        let randomRockNum = Math.floor(Math.random() * 6) + 1;
+        rock.src = mediaBasePath + "rock-" + randomRockNum + ".webp";
+
+        rockCurrentBottom = Math.floor(Math.random() * 25) + 20;
+        rock.style.bottom = rockCurrentBottom + 'px';
+
+        rock.style.display = 'block';
+        rock.classList.remove('rock-moving');
+        void rock.offsetWidth; 
+        rock.classList.add('rock-moving');
+    }
+
+    rock.addEventListener('animationend', () => {
+        rock.classList.remove('rock-moving');
+        rock.style.display = 'none';
+        isRockActive = false;
+    });
+
+    function startRunAnimation() {
+        let frameIndex = 0;
+        const runFrames = [charFrames.run1, charFrames.run2, charFrames.run3];
+        runCycleInterval = setInterval(() => {
+            if (isJumping) return;
+            character.src = runFrames[frameIndex];
+            frameIndex = (frameIndex + 1) % runFrames.length;
+        }, 120);
+    }
+
+    function jump() {
+        if (isJumping) return;
+        isJumping = true;
+        velocityY = jumpStrength;
+
+        playJumpSound();
+        character.src = charFrames.jump;
+
+        let jumpInterval = setInterval(() => {
+            velocityY -= gravity;
+            charBottom += velocityY;
+
+            if (charBottom <= 0) {
+                charBottom = 0;
+                isJumping = false;
+                clearInterval(jumpInterval);
+                character.style.bottom = '0px';
+            } else {
+                character.style.bottom = charBottom + 'px';
+            }
+        }, 20);
+    }
+
+    function startGame() {
+        if (isPlaying) return;
+        
+        initAudio();
+        isPlaying = true;
+        score = 0;
+        charBottom = 0;
+        lastTriggeredMilestone = 0;
+        isRockActive = false;
+        currentBgIndex = 0;
+        scoreVal.textContent = score;
+        message.style.display = 'none';
+        character.style.bottom = '0px';
+        
+        bgLayer.style.backgroundImage = `url('${bgImages[0]}')`;
+        bgLayerNext.style.opacity = '0';
+
+        rock.style.display = 'none';
+        rock.classList.remove('rock-moving');
+
+        updateCactus();
+        startRunAnimation();
+
+        scoreInterval = setInterval(() => {
+            score++;
+            scoreVal.textContent = score;
+            updateBackground();
+
+            if (score > 0 && score % 50 === 0 && score !== lastTriggeredMilestone) {
+                lastTriggeredMilestone = score;
+                triggerMilestoneRock();
+            } else {
+                updateCactus();
+            }
+        }, 100);
+
+        collisionCheck = setInterval(() => {
+            if (!isRockActive) {
+                let obsRight = parseInt(window.getComputedStyle(obstacle).getPropertyValue('right'));
+                if (obsRight > 480 && obsRight < 535 && charBottom < 20) {
+                    gameOver('cactus');
+                }
+            }
+
+            if (isRockActive) {
+                let rockRight = parseInt(window.getComputedStyle(rock).getPropertyValue('right'));
+                if (rockRight > 480 && rockRight < 535) {
+                    let dinoTop = charBottom + 48;
+                    let dinoBottom = charBottom;
+                    let rockTop = rockCurrentBottom + 32;
+                    let rockBottom = rockCurrentBottom;
+
+                    if (dinoBottom < rockTop && dinoTop > rockBottom) {
+                        gameOver('rock');
+                    }
+                }
+            }
+        }, 10);
+    }
+
+    function gameOver(obstacleType) {
+        isPlaying = false;
+        
+        if (obstacleType === 'cactus') {
+            playCactusHitSound();
+        } else {
+            playRockHitSound();
+        }
+
+        obstacle.classList.remove('moving');
+        rock.classList.remove('rock-moving');
+        obstacle.style.display = 'none';
+        rock.style.display = 'none';
+        isRockActive = false;
+        clearInterval(scoreInterval);
+        clearInterval(collisionCheck);
+        clearInterval(runCycleInterval);
+        
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('dinoHighScore', highScore);
+            highScoreVal.textContent = highScore;
+        }
+
+        character.src = charFrames.idle;
+        message.textContent = 'Game Over! Tap or Space to Restart';
+        message.style.display = 'block';
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            initAudio();
+            e.preventDefault();
+            !isPlaying ? startGame() : jump();
+        }
+    });
+
+    document.getElementById('runner-game').addEventListener('click', () => {
+        !isPlaying ? startGame() : jump();
+    });
+})();
+</script>
+
+<div class="game-attribution">
+    Developed by <a href="https://ericksonvilleta.com" target="_blank" rel="noopener noreferrer">Erick Villeta</a> - Inspired by <span style="display: inline-flex; align-items: center; vertical-align: middle; white-space: nowrap;"><svg aria-label="Google" height="1em" style="flex:none;line-height:1" viewBox="0 0 77 24" xmlns="http://www.w3.org/2000/svg"><title>Google</title><path d="M19.947 8.482H11.43v2.536h6.041c-.298 3.557-3.247 5.074-6.03 5.074-3.562 0-6.67-2.812-6.67-6.753 0-3.839 2.963-6.795 6.677-6.795 2.866 0 4.555 1.833 4.555 1.833l1.77-1.84S15.5 0 11.357 0C6.081 0 2 4.468 2 9.294c0 4.729 3.84 9.34 9.491 9.34 4.972 0 8.61-3.417 8.61-8.47 0-1.067-.154-1.683-.154-1.683" fill="#4285F4"></path><path d="M26.96 8.997c1.719 0 3.347 1.395 3.347 3.642 0 2.199-1.621 3.633-3.355 3.633-1.905 0-3.408-1.53-3.408-3.65 0-2.075 1.485-3.625 3.416-3.625zm-.035-2.352c-3.495 0-6 2.742-6 5.94 0 3.245 2.43 6.038 6.041 6.038 3.27 0 5.948-2.508 5.948-5.968 0-3.967-3.116-6.01-5.989-6.01z" fill="#EB4335"></path><path d="M40.01 8.997c1.718 0 3.347 1.395 3.347 3.642 0 2.199-1.622 3.633-3.356 3.633-1.904 0-3.407-1.53-3.407-3.65 0-2.075 1.484-3.625 3.415-3.625zm-.035-2.352c-3.496 0-6 2.742-6 5.94 0 3.245 2.43 6.038 6.04 6.038 3.27 0 5.949-2.508 5.949-5.968 0-3.967-3.116-6.01-5.99-6.01z" fill="#FBBC05"></path><path d="M53.006 9c1.573 0 3.188 1.347 3.188 3.648 0 2.34-1.611 3.629-3.222 3.629-1.71 0-3.302-1.394-3.302-3.607 0-2.299 1.652-3.67 3.336-3.67zm-.232-2.349c-3.208 0-5.73 2.82-5.73 5.984 0 3.605 2.924 5.996 5.675 5.996 1.7 0 2.605-.678 3.273-1.455v1.18c0 2.067-1.25 3.304-3.137 3.304-1.824 0-2.738-1.36-3.056-2.132l-2.293.962c.813 1.726 2.451 3.527 5.368 3.527 3.19 0 5.62-2.016 5.62-6.244V7.012h-2.502v1.014c-.77-.832-1.821-1.375-3.218-1.375z" fill="#4285F4"></path><path d="M69.725 8.94c1.09 0 1.875.582 2.209 1.28l-5.345 2.241c-.23-1.735 1.408-3.52 3.136-3.52zm-.104-2.303c-3.026 0-5.567 2.416-5.567 5.981 0 3.772 2.832 6.01 5.858 6.01 2.525 0 4.075-1.387 5-2.629l-2.063-1.377c-.536.833-1.43 1.648-2.925 1.648-1.678 0-2.45-.922-2.927-1.815L75 11.123l-.415-.976c-.774-1.913-2.577-3.51-4.964-3.51z" fill="#EB4335"></path><path d="M60.239 18.272h2.628V.62H60.24z" fill="#34A853"></path></svg></span>'s <a href="chrome://dino/" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); alert('To open the built-in Chrome Dinosaur game, please copy and paste chrome://dino/ directly into your browser address bar in a new tab.');">Dinosaur Game</a>.
+</div>
